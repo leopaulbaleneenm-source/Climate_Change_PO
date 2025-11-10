@@ -2,12 +2,63 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from packages.mining import reindex_clim_on_year, compute_diff
-from packages.plotting import actu_year_vs_plot, plot_rr_nrm
+from packages.plotting import actu_year_vs_plot, plot_rr_nrm, plot_threshold, plot_data
+
+
+def climatology(
+    sr: pd.Series,
+    start: str,
+    end: str,
+    variable: str,
+):
+    """
+    Computes climatology for a given variable over a specified period.
+
+    Args:
+        sr (pd.Series): initial pd.Series containing the time series data.
+        start (str): start date of the climatology period (inclusive).
+        end (str): end date of the climatology period (inclusive).
+        variable (str): name of the variable for labeling purposes.
+
+    Returns:
+        Two pd.Series: climatology computed using median and mean methods.
+    """
+    start_year = start[:4]
+    end_year = end[:4]
+    
+    if not isinstance(sr.index, pd.DatetimeIndex):
+        raise TypeError("Serie index must be a DatetimeIndex")
+    
+    sr_clim = sr.loc[start:end]
+    dayofyear = sr_clim.index.dayofyear
+    
+    # Computing median method
+    method = "median"
+    sr_clim_median = sr_clim.groupby(dayofyear).median()
+    plot_data(
+        sr_clim_median,
+        "Normal",
+        f"{variable} normal ({method}) in Rivesaltes computed from {start_year} to {end_year}",
+        f"{method}_norm_{variable}_{start_year}_{end_year}"
+    )
+    # Computing mean method
+    method = "mean"
+    sr_clim_mean = sr_clim.groupby(dayofyear).mean()
+    plot_data(
+        sr_clim_mean,
+        "Normal",
+        f"{variable} normal ({method}) in Rivesaltes computed from {start_year} to {end_year}",
+        f"{method}_norm_{variable}_{start_year}_{end_year}"
+    )
+
+    return sr_clim_median, sr_clim_mean
+
 
 def quantiles(
     sr : pd.Series,
     title : str,
-    img_title : str
+    ylabel : str,
+    img_path : str
 ):
 
     sr_daily = sr.resample("D").mean()
@@ -42,11 +93,11 @@ def quantiles(
     plt.legend()
     plt.title(f"{title}")
     plt.xlabel("Date")
-    plt.ylabel("Température (°C)")
+    plt.ylabel(f"{ylabel}")
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(
-        f"figs/temp/{img_title}.png",
+        f"figs/{img_path}.png",
         dpi=300,
         bbox_inches="tight"
     )
@@ -56,6 +107,7 @@ def quantiles(
 
 
 def thresholds (
+    variable: str,
     months : list,
     months_letter : str,
     first_sr : pd.Series,
@@ -64,6 +116,30 @@ def thresholds (
     periods : list,
     study_sign : str
 ):
+    """
+    Computes and plots the frequency of days exceeding or below a given temperature threshold
+    for two different periods and specified months.
+    
+    Args:
+        months (list): List of month numbers to consider (e.g., [6, 7, 8] for June, July, August).
+        months_letter (str): String representation of the months (e.g., "JJA").
+        first_sr (pd.Series): Temperature series for the first period.
+        second_sr (pd.Series): Temperature series for the second period.
+        threshold (int): Temperature threshold to evaluate (°C).
+        data_type (str): Type of temperature data ("maximal" or "minimal").
+        periods (list): List containing two strings representing the periods (e.g., ["1997-2010", "2011-2024"]).
+        study_sign (str): Sign to study, either ">" or "<".
+    """
+    
+    if variable == "temperature" or "minimal temperature" or "maximal temperature":
+        unit = "°C"
+    elif variable == "relative humidity":
+        unit = "%"
+    elif variable == "precipitation":
+        unit = "mm"
+    else:
+        raise ValueError("Variable unit not defined")
+    
     # List to store the counts
     count = []
     
@@ -84,38 +160,26 @@ def thresholds (
     
     count_frst = sr_freq_frst.count()
     date_frst = sr_freq_frst.index.to_list()
-    print(f"Numbre of days with T {study_sign} {threshold}°C for {periods[0]} : {count_frst}")
+    print(f"Numbre of days with {variable} {study_sign} {threshold}{unit} for {periods[0]} : {count_frst}")
     print(f"The corresponding dates are : {date_frst}")
     count.append(count_frst)
     
     count_snd = sr_freq_snd.count()
     date_snd = sr_freq_snd.index.to_list()
-    print(f"Numbre of days with T {study_sign} {threshold}°C for {periods[1]} : {count_snd}")
+    print(f"Numbre of days with {variable} {study_sign} {threshold}{unit} for {periods[1]} : {count_snd}")
     print(f"The corresponding dates are : {date_snd}")
     count.append(count_snd)
     
-    plt.figure(figsize=(6, 5))
-    fig, ax = plt.subplots(figsize=(6, 5))
-    bars = ax.bar(periods, count, color=["lightblue", "salmon"])
-    ax.set_title(f"Number of days with maximum temperature {study_sign} {threshold}°C during {months_letter}")
-    ax.set_ylabel("Number of days")
-    ax.grid(axis="y", alpha=0.3)
-
-    # Annotate bars with their values
-    ymax = max(count) if len(count) else 0
-    for bar, val in zip(bars, count):
-        height = bar.get_height()
-        ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            height / 2,
-            f"{int(val)}",
-            ha="center",
-            va="bottom",
-            fontsize=10,
-            color="black"
-        )
-    plt.tight_layout()
-    plt.show()
+    # Plotting the frequency comparison
+    plot_threshold(
+        variable,
+        unit,
+        count,
+        months_letter,
+        threshold,
+        periods,
+        study_sign
+    )
     
     
 def year_vs_climato(

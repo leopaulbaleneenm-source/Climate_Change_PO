@@ -1,0 +1,10 @@
+setup.py
+Climate_Change_PO.egg-info/PKG-INFO
+Climate_Change_PO.egg-info/SOURCES.txt
+Climate_Change_PO.egg-info/dependency_links.txt
+Climate_Change_PO.egg-info/requires.txt
+Climate_Change_PO.egg-info/top_level.txt
+packages/__init__.py
+packages/computing.py
+packages/mining.py
+packages/plotting.py

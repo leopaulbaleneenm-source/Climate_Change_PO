@@ -8,6 +8,16 @@ def open_data(
     path : str,
     var_name : str
     ):
+    """
+    Opens the data from a CSV file and returns a pandas Series for the specified variable.
+
+    Args:
+        path (str): paths to the CSV file.
+        var_name (str): name of the variable/column to extract.
+
+    Returns:
+        pd.Series: Series containing the data for the specified variable.
+    """
     
     df = pd.read_csv(path, sep=';', encoding='utf-8')
     df["DATE"] = pd.to_datetime(df["DATE"], format="%Y%m%d%H")
@@ -22,16 +32,26 @@ def open_data(
 
 
 def reindex_clim_on_year(
-    sr_current,
-    sr_clim
-    
+    sr_current: pd.Series,
+    sr_clim: pd.Series  
 ):
-    # Getting the climatology data and create a datetime index aligned on the actual year
+    """
+    Reindexes the climatology Series to align with the dates of the current year Series.
+
+    Args:
+        sr_current (pd.Series): Pandas Series for the current year.
+        sr_clim (pd.Series): Pandas Series for the climatology.
+
+    Returns:
+        pd.Series: Reindexed climatology Series aligned with the current year dates.
+    """
+    # Getting the current year index
     target_index = sr_current.index
     year = target_index[0].year
 
     clim = sr_clim.sort_index()
-
+    
+    # Adjust for leap years
     if clim.index.max() == 366 and not calendar.isleap(year):
         vals = clim.values.copy()
         vals = np.delete(vals, 59)
@@ -39,6 +59,7 @@ def reindex_clim_on_year(
     else:
         clim_for_year = clim.copy()
 
+    # Mapping the climatology values to the current year dates
     days = target_index.dayofyear
     mapped_values = clim_for_year.loc[days].values
     sr_clim_on_dates = pd.Series(data=mapped_values, index=target_index)
@@ -47,8 +68,8 @@ def reindex_clim_on_year(
 
 
 def compute_diff(
-    sr_ref,
-    sr_ex
+    sr_ref: pd.Series,
+    sr_ex: pd.Series
 ):
     sr_diff = sr_ref - sr_ex
     
