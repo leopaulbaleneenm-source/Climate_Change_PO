@@ -1,2 +1,3 @@
 /data
-/figs
+/figs__pycache__/
+*.pyc
