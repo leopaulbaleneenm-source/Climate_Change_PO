@@ -1,6 +1,7 @@
 import calendar
 
 import numpy as np
+import xarray as xr
 import pandas as pd
 
 
@@ -10,7 +11,7 @@ def open_data(
     ):
     """
     Opens the data from a CSV file and returns a pandas Series for the specified variable.
-
+    
     Args:
         path (str): paths to the CSV file.
         var_name (str): name of the variable/column to extract.
@@ -18,17 +19,39 @@ def open_data(
     Returns:
         pd.Series: Series containing the data for the specified variable.
     """
+    if path.endswith(".csv"): 
+        df = pd.read_csv(path, sep=';', encoding='utf-8')
+        df["DATE"] = pd.to_datetime(df["DATE"], format="%Y%m%d%H")
+        df = df.set_index("DATE")
+        if "Poste" in df.columns:
+            df = df.drop("POSTE", axis=1)
+        
+        sr = df[var_name].astype(str).str.replace(",", ".", regex=False).astype(float)
+        dates_nan = sr[sr.isna()].index
+        print(dates_nan)
+        return sr
     
-    df = pd.read_csv(path, sep=';', encoding='utf-8')
-    df["DATE"] = pd.to_datetime(df["DATE"], format="%Y%m%d%H")
-    df = df.set_index("DATE")
-    df = df.drop("POSTE", axis=1)
-    
-    sr = df[var_name].astype(str).str.replace(",", ".", regex=False).astype(float)
-    dates_nan = sr[sr.isna()].index
-    print(dates_nan)
-    
-    return sr
+    elif path.endswith("nc"):
+        ds = xr.open_dataset(path)
+        da = ds[var_name].squeeze()
+        if "time" in da.coords:
+            sr = pd.Series(
+                data=da.values,
+                index=pd.to_datetime(da["time"].values),
+                name=var_name
+                )
+            
+            sr = (sr.astype('float64') - 273.15).round(2)
+            
+            dates_nan = sr[sr.isna()].index
+            nan_by_year = sr.isna().groupby(sr.index.year).sum()
+            nan_by_year = nan_by_year[nan_by_year != 0]
+            print(nan_by_year)
+            print(dates_nan)
+
+        return sr
+            
+    raise ValueError("Unsupported file format. Use .csv or .nc.")      
 
 
 def reindex_clim_on_year(

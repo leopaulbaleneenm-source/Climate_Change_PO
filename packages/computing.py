@@ -81,15 +81,25 @@ def quantiles(
     dic_quantiles["Max"] = sr_max
     dic_quantiles["Min"] = sr_min
 
+    # Number of days per year
+    days_per_year = sr_daily.groupby(sr_daily.index.year).size()
+    # Count year's number of days < 365
+    need_fix = (days_per_year < 365).any()
+
+    if need_fix:
+        index_full = pd.Index(range(1, 366))
+        for k in dic_quantiles:
+            dic_quantiles[k] = dic_quantiles[k].reindex(index_full).interpolate()
+
     plt.figure(figsize=(12, 6))
-    plt.plot(sr_q10.index, sr_q10, label="Q10", linestyle="--", color="lightgreen")
-    plt.plot(sr_q25.index, sr_q25, label="Q25", linestyle="--", color="green")
-    plt.plot(sr_q50.index, sr_q50, label="Median", color="blue")
-    plt.plot(sr_q75.index, sr_q75, label="Q75", linestyle="--", color="orange")
-    plt.plot(sr_q90.index, sr_q90, label="Q90", linestyle="--", color="red")
-    plt.plot(sr_max.index, sr_max, label="Max", color="black")
-    plt.plot(sr_min.index, sr_min, label="Min", color="black")
-    plt.fill_between(sr_min.index, sr_min, sr_max, color="lightgray", alpha=0.3)
+    plt.plot(dic_quantiles["Q10"].index, dic_quantiles["Q10"], label="Q10", linestyle="--", color="lightgreen")
+    plt.plot(dic_quantiles["Q25"].index, dic_quantiles["Q25"], label="Q25", linestyle="--", color="green")
+    plt.plot(dic_quantiles["Q50"].index, dic_quantiles["Q50"], label="Median", color="blue")
+    plt.plot(dic_quantiles["Q75"].index, dic_quantiles["Q75"], label="Q75", linestyle="--", color="orange")
+    plt.plot(dic_quantiles["Q90"].index, dic_quantiles["Q90"], label="Q90", linestyle="--", color="red")
+    plt.plot(dic_quantiles["Max"].index, dic_quantiles["Max"], label="Max", color="black")
+    plt.plot(dic_quantiles["Min"].index, dic_quantiles["Min"], label="Min", color="black")
+    plt.fill_between(dic_quantiles["Min"].index, dic_quantiles["Min"], dic_quantiles["Max"], color="lightgray", alpha=0.3)
     plt.legend()
     plt.title(f"{title}")
     plt.xlabel("Date")

@@ -5,8 +5,9 @@ import matplotlib.pyplot as plt
 def plot_data(
     sr: pd.Series,
     var_name: str,
-    var_call: str,
-    img_title: str,  
+    graph_title: str,
+    img_title: str, 
+    station: bool = True,
     yaxe_precision: bool = False, 
     season: str = None
     ):
@@ -48,12 +49,14 @@ def plot_data(
             label=var_name,
             color="blue"
             ) 
-    
-    plt.title(f"{var_call} at Rivesaltes station") 
+    if station == True:
+        plt.title(f"{graph_title} at Rivesaltes station") 
+    if station == False:
+        plt.title(f"{graph_title} derived from Era5 reanalysis for Perpignan")
 
     plt.xlabel("Date") 
     
-    var_call_lower = var_call.lower()
+    var_call_lower = graph_title.lower()
     if "temperature" in var_call_lower:
         plt.ylabel("Temperature (°C)") 
     elif "precipitation" in var_call_lower:
