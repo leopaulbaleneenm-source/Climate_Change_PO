@@ -1,15 +1,16 @@
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import packages.plotting as pltt
 
 from packages.mining import reindex_clim_on_year, compute_diff
-from packages.plotting import actu_year_vs_plot, plot_rr_nrm, plot_threshold, plot_data
-
 
 def climatology(
     sr: pd.Series,
     start: str,
     end: str,
     variable: str,
+    folder
 ):
     """
     Computes climatology for a given variable over a specified period.
@@ -35,20 +36,20 @@ def climatology(
     # Computing median method
     method = "median"
     sr_clim_median = sr_clim.groupby(dayofyear).median()
-    plot_data(
+    pltt.plot_data(
         sr_clim_median,
         "Normal",
-        f"{variable} normal ({method}) in Rivesaltes computed from {start_year} to {end_year}",
-        f"{method}_norm_{variable}_{start_year}_{end_year}"
+        f"{variable} normal ({method} / {start_year}-{end_year}) at Rivesaltes",
+        f"{folder}/{method}_norm_{variable}_{start_year}_{end_year}"
     )
     # Computing mean method
     method = "mean"
     sr_clim_mean = sr_clim.groupby(dayofyear).mean()
-    plot_data(
+    pltt.plot_data(
         sr_clim_mean,
         "Normal",
-        f"{variable} normal ({method}) in Rivesaltes computed from {start_year} to {end_year}",
-        f"{method}_norm_{variable}_{start_year}_{end_year}"
+        f"{variable} normal ({method} / {start_year}-{end_year}) at Rivesaltes",
+        f"{folder}/{method}_norm_{variable}_{start_year}_{end_year}"
     )
 
     return sr_clim_median, sr_clim_mean
@@ -56,30 +57,50 @@ def climatology(
 
 def quantiles(
     sr : pd.Series,
+    type : str,
     title : str,
     ylabel : str,
-    img_path : str
+    img_path : str,
+    all : bool = True
 ):
+    """
+    This function computes and plots quantiles from a datasets. 
 
-    sr_daily = sr.resample("D").mean()
+    Args:
+        sr (pd.Series): pandas serie containing the data
+        type (str): type of data used (eg: max, min, avg)
+        title (str): title of the chart
+        ylabel (str): name for the ylabel chart depending on the data type 
+        img_path (str): path to storage the chart as a png image
+        all (bool, optional): Depending on the data, can plot all the quantiles by True or
+                            only mean/max/min with False. Defaults to True.
+
+    Returns:
+        Dictionnary containing the computed quantiles
+    """
+
+    if type == "avg":
+        sr_daily = sr.resample("D").mean()
+    elif type == "max":
+        sr_daily = sr.resample("D").max()
+    elif type == "min":
+        sr_daily = sr.resample("D").min()
+
     dayofyear = sr_daily.index.dayofyear
     dic_quantiles = {}
     
-    sr_q10 = sr_daily.groupby(dayofyear).quantile(0.10)
-    sr_q25 = sr_daily.groupby(dayofyear).quantile(0.25)
-    sr_q50 = sr_daily.groupby(dayofyear).quantile(0.50)
-    sr_q75 = sr_daily.groupby(dayofyear).quantile(0.75)
-    sr_q90 = sr_daily.groupby(dayofyear).quantile(0.90)
-    sr_max = sr_daily.groupby(dayofyear).max()
-    sr_min = sr_daily.groupby(dayofyear).min()
+    quantile_map = {
+        "Q10": 0.10,
+        "Q25": 0.25,
+        "Q50": 0.50,
+        "Q75": 0.75,
+        "Q90": 0.90
+    }
+    for qname, qval in quantile_map.items():
+        dic_quantiles[qname] = sr_daily.groupby(dayofyear).quantile(qval)
     
-    dic_quantiles["Q10"] = sr_q10
-    dic_quantiles["Q25"] = sr_q25
-    dic_quantiles["Q50"] = sr_q50
-    dic_quantiles["Q75"] = sr_q75
-    dic_quantiles["Q90"] = sr_q90
-    dic_quantiles["Max"] = sr_max
-    dic_quantiles["Min"] = sr_min
+    dic_quantiles["Max"] = sr_daily.groupby(dayofyear).max()
+    dic_quantiles["Min"] = sr_daily.groupby(dayofyear).min()
 
     # Number of days per year
     days_per_year = sr_daily.groupby(sr_daily.index.year).size()
@@ -91,39 +112,50 @@ def quantiles(
         for k in dic_quantiles:
             dic_quantiles[k] = dic_quantiles[k].reindex(index_full).interpolate()
 
-    plt.figure(figsize=(12, 6))
-    plt.plot(dic_quantiles["Q10"].index, dic_quantiles["Q10"], label="Q10", linestyle="--", color="lightgreen")
-    plt.plot(dic_quantiles["Q25"].index, dic_quantiles["Q25"], label="Q25", linestyle="--", color="green")
-    plt.plot(dic_quantiles["Q50"].index, dic_quantiles["Q50"], label="Median", color="blue")
-    plt.plot(dic_quantiles["Q75"].index, dic_quantiles["Q75"], label="Q75", linestyle="--", color="orange")
-    plt.plot(dic_quantiles["Q90"].index, dic_quantiles["Q90"], label="Q90", linestyle="--", color="red")
-    plt.plot(dic_quantiles["Max"].index, dic_quantiles["Max"], label="Max", color="black")
-    plt.plot(dic_quantiles["Min"].index, dic_quantiles["Min"], label="Min", color="black")
-    plt.fill_between(dic_quantiles["Min"].index, dic_quantiles["Min"], dic_quantiles["Max"], color="lightgray", alpha=0.3)
-    plt.legend()
-    plt.title(f"{title}")
-    plt.xlabel("Date")
-    plt.ylabel(f"{ylabel}")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(
-        f"figs/{img_path}.png",
-        dpi=300,
-        bbox_inches="tight"
+    pltt.plot_quantiles(
+        dic_quantiles,
+        title,
+        ylabel,
+        img_path,
+        all
     )
-    plt.show()
     
     return dic_quantiles
+
+
+def quantile_max(
+    sr,
+    start_date,
+    end_date,
+    title
+):
+    """
+    This function is quite similar to the quantiles function. 
+    Improvments could be done by merging both functions.
+
+    Args:
+        sr (pd.Series): _description_
+        start_date (str): _description_
+        end_date (str): _description_
+        title (str): _description_
+    """
+    sr_selected = sr.loc[start_date:end_date]
+    sr_selected_d = sr_selected.resample("D").max()
+    
+    dayofyear = sr_selected_d.index.dayofyear
+    sr_q50 = sr_selected_d.groupby(dayofyear).quantile(0.50)
+    sr_max = sr_selected_d.groupby(dayofyear).max()
+    sr_min = sr_selected_d.groupby(dayofyear).min()
+    
+    pltt.plot_quantiles_max(sr_q50, sr_max, sr_min, title)
 
 
 def thresholds (
     variable: str,
     months : list,
-    months_letter : str,
     first_sr : pd.Series,
     second_sr : pd.Series,
     threshold : int,
-    periods : list,
     study_sign : str
 ):
     """
@@ -132,16 +164,26 @@ def thresholds (
     
     Args:
         months (list): List of month numbers to consider (e.g., [6, 7, 8] for June, July, August).
-        months_letter (str): String representation of the months (e.g., "JJA").
         first_sr (pd.Series): Temperature series for the first period.
         second_sr (pd.Series): Temperature series for the second period.
         threshold (int): Temperature threshold to evaluate (°C).
         data_type (str): Type of temperature data ("maximal" or "minimal").
-        periods (list): List containing two strings representing the periods (e.g., ["1997-2010", "2011-2024"]).
         study_sign (str): Sign to study, either ">" or "<".
     """
     
-    if variable == "temperature" or "minimal temperature" or "maximal temperature":
+    if months == [12, 1, 2]:
+        months_letter="DJF"
+    elif months == [3, 4, 5]:
+        months_letter="MAM"
+    elif months == [6, 7, 8]:
+        months_letter="JJA"
+    elif months == [9, 10, 11]:
+        months_letter="SON"
+    
+    periods = [f"{first_sr.index.year.min()}-{first_sr.index.year.max()}",
+               f"{second_sr.index.year.min()}-{second_sr.index.year.max()}"]
+    
+    if variable in ["temperature", "minimal temperature", "maximal temperature"]:
         unit = "°C"
     elif variable == "relative humidity":
         unit = "%"
@@ -181,7 +223,7 @@ def thresholds (
     count.append(count_snd)
     
     # Plotting the frequency comparison
-    plot_threshold(
+    pltt.plot_threshold(
         variable,
         unit,
         count,
@@ -190,6 +232,88 @@ def thresholds (
         periods,
         study_sign
     )
+    
+    
+def thresholds_serie(
+    variable: str,
+    months : list,
+    list_sr : list,
+    threshold : int,
+    study_sign : str
+):
+    """
+    Computes and plots the frequency of days exceeding or below a given temperature threshold
+    for two different periods and specified months.
+    
+    Args:
+        months (list): List of month numbers to consider (e.g., [6, 7, 8] for June, July, August).
+        first_sr (pd.Series): Temperature series for the first period.
+        second_sr (pd.Series): Temperature series for the second period.
+        threshold (int): Temperature threshold to evaluate (°C).
+        data_type (str): Type of temperature data ("maximal" or "minimal").
+        study_sign (str): Sign to study, either ">" or "<".
+    """
+    
+    dic_count = {}
+    
+    if variable in ["temperature", "minimal temperature", "maximal temperature"]:
+        unit = "°C"
+    elif variable == "relative humidity":
+        unit = "%"
+    elif variable == "precipitation":
+        unit = "mm"
+    else:
+        raise ValueError("Variable unit not defined")
+    
+    # Seasons definition
+    seasons = {
+        (12, 1, 2): "DJF",
+        (3, 4, 5): "MAM",
+        (6, 7, 8): "JJA",
+        (9, 10, 11): "SON",
+    }
+    
+    months_letter = None
+    for mlist, label in seasons.items():
+        if set(months) == set(mlist):
+            months_letter = label
+            break
+
+    if months_letter is None:
+        months_letter = str(months)
+        
+    for sr in list_sr:
+        
+        period = f"{sr.index.year.min()}-{sr.index.year.max()}"
+
+        # Selecting the months
+        sr_months = sr[sr.index.month.isin(months)]
+    
+        if study_sign == ">":
+            sr_freq = sr_months[sr_months > threshold]
+        elif study_sign == "<":
+            sr_freq = sr_months[sr_months < threshold]
+        else:
+            raise ValueError("Study sign must be either '>' or '<'")
+    
+        count = sr_freq.count()
+        date = sr_freq.index.to_list()
+        print(f"Numbre of days with {variable} {study_sign} {threshold}{unit} for {period} : {count}")
+        print(f"The corresponding dates are : {date}")
+        
+        dic_count[period] = count
+    
+    # Plotting the frequency comparison
+    pltt.plot_threshold_serie(
+        variable,
+        unit,
+        dic_count,
+        months_letter,
+        threshold,
+        study_sign
+    )
+    
+    return dic_count
     
     
 def year_vs_climato(
@@ -290,13 +414,13 @@ def year_vs_climato(
         )
 
     plt.savefig(
-        f"figs/temp/norm_{time_range_climato}_{year}_year.png",
+        f"figs/temp/clim_vs_year/norm_{time_range_climato}_{year}_year.png",
         dpi=300,
         bbox_inches="tight"
     )
     
     # Plotting compared to quantiles
-    actu_year_vs_plot(
+    pltt.actu_year_vs_plot(
         dic_quantiles_on_dates,
         sr_actu_year_d,
         time_range_climato,
@@ -339,7 +463,7 @@ def precip_climato(
             dayofyear = sr_stdy_d.index.dayofyear
             sr_climato = sr_stdy_d.groupby(dayofyear).median()
 
-        plot_rr_nrm(
+        pltt.plot_rr_nrm(
             sr_climato,
             frst_year,
             last_year,
@@ -355,7 +479,7 @@ def precip_climato(
         if method == "median":
             sr_climato = sr_stdy_m.groupby(sr_stdy_m.index.month).median()
         
-        plot_rr_nrm(
+        pltt.plot_rr_nrm(
             sr_climato,
             frst_year,
             last_year,
@@ -364,3 +488,222 @@ def precip_climato(
         )
         
     return sr_climato
+
+
+def clim_ma(
+    sr,
+    var_name,
+    ma_range,
+    method,
+    start_range,
+    end_range,
+    folder = None,
+    plot = True
+):
+    """
+    Produces a normal based on a moving average method <=> Ti for i day is equal to the average of T[i-n;i-1], 
+    Ti and T[i+1;i+n] where n is the max number of days taken before and after the i day. Smoothes the normal.
+
+    Args:
+        sr (pd.series): pandas series containing the values
+        ma_range (int): numbers of days used to compute the moving average (equal to 2n+1)
+        method (str): can be mean or median
+        start_range (str): first date time to compute the normal
+        end_range (str): last date time to compute the normal
+        folder (str): folder to store the image
+        
+    Returns:
+        pd.series: contaning the normal indexes on 366 days
+    """
+    sr_range = sr.loc[start_range:end_range]
+    
+    start_year = start_range[:4]
+    end_year = end_range[:4]
+    
+    # Extracting each day
+    day = sr_range.index.dayofyear
+    # Building a serie with the days
+    if method == "mean":
+        sr_day = sr_range.groupby(day).apply(np.mean)
+    elif method == "median":
+        sr_day = sr_range.groupby(day).apply(np.median)
+    
+    # Risk for limit days (as 1 or 365) to not be able to have an average
+    # Wrap-around of the calendar to do the average for 1 with 364/364/365 and 2/3/4
+    # It creates a continuity: 365 is followed by 1
+    sr_extended = pd.concat(
+        [sr_day, sr_day, sr_day], 
+        ignore_index=True
+        )
+    
+    # Applying the moving average
+    if method == "mean":
+        sr_smoothed = sr_extended.rolling(
+            window=ma_range, 
+            center=True, 
+            min_periods=1
+            ).mean()
+    elif method == "median":
+        sr_smoothed = sr_extended.rolling(
+            window=ma_range, 
+            center=True, 
+            min_periods=1
+            ).median()
+    
+    # Extracting the central part = smooth climatology
+    n = len(sr_day)
+    sr_clim = sr_smoothed[n : 2*n].reset_index(drop=True)
+    
+    if folder is not None:
+        if plot == True:
+            pltt.plot_data(
+                sr_clim,
+                "Normal",
+                f"Moving average ({ma_range} days) {method} normal {var_name} ({start_year}-{end_year})",
+                f"{folder}/ma_{ma_range}days_{method}_norm_{start_year}_{end_year}"
+            )
+    
+    return sr_clim
+
+
+def clim_ma_compa(
+    sr,
+    range_ma,
+    method,
+    start_range,
+    end_range,
+    folder = None
+):
+    
+    dic_nrms = {}
+    start, stop, step = range_ma
+    
+    for ndays in range(start, stop, step):
+        sr_clim = clim_ma(
+            sr,
+            ndays,
+            method,
+            start_range,
+            end_range,
+            folder,
+            False
+            )
+        dic_nrms[ndays] = sr_clim
+    
+    return (dic_nrms)
+
+
+def ma_quantiles(
+    sr,
+    ma_range,
+    type,
+    start_range,
+    end_range,
+    title,
+    ylabel,
+    folder,
+    all = True
+):
+    """
+    Compute moving-average climatological quantiles using the same wrap-around logic
+    as clim_ma().
+
+    Args:
+        sr (pd.Series): time series data
+        ma_range (int): moving average window (must be odd ideally)
+        type (str): "avg", "max", "min" (same as quantiles())
+        start_range (str): beginning of period
+        end_range (str): end of period
+        folder (str): folder to save plots
+        quantiles (list): quantiles to compute
+        plot (bool): produce plot or not
+
+    Returns:
+        dict of pd.Series: smoothed quantiles indexed 1..366
+    """
+
+    sr_range = sr.loc[start_range:end_range]
+    start_year = start_range[:4]
+    end_year = end_range[:4]
+
+    if type == "avg":
+        sr_daily = sr_range.resample("D").mean()
+    elif type == "max":
+        sr_daily = sr_range.resample("D").max()
+    elif type == "min":
+        sr_daily = sr_range.resample("D").min()
+
+    dayofyear = sr_daily.index.dayofyear
+
+    # --- Raw quantiles per day ---
+    dic_q = {}
+
+    qnames = ["Q10", "Q25", "Q50", "Q75", "Q90"]
+    qvalues = [0.10, 0.25, 0.50, 0.75, 0.90]
+
+    for qname, qval in zip(qnames, qvalues):
+        dic_q[qname] = sr_daily.groupby(dayofyear).quantile(qval)
+
+    # Add Min/Max
+    dic_q["Min"] = sr_daily.groupby(dayofyear).min()
+    dic_q["Max"] = sr_daily.groupby(dayofyear).max()
+
+    # --- Wrap-around extension (same as clim_ma) ---
+    dic_ext = {}
+    for key, serie in dic_q.items():
+        dic_ext[key] = pd.concat([serie, serie, serie], ignore_index=True)
+
+    # --- Rolling window smoothing ---
+    dic_smooth = {}
+    for key, serie in dic_ext.items():
+        dic_smooth[key] = (
+            serie.rolling(
+                window=ma_range,
+                center=True,
+                min_periods=1
+            ).mean()
+        )
+
+    # --- Extract central part (+ reset index 1..366) ---
+    n = len(dic_q[qnames[0]])  # number of days = 365 or 366
+    dic_final = {}
+    for key, serie in dic_smooth.items():
+        dic_final[key] = serie[n:2*n].reset_index(drop=True)
+        dic_final[key].index = range(1, len(dic_final[key])+1)
+
+    img_path = (
+        f"{folder}/ma_{ma_range}days_quantiles_{start_year}_{end_year}"
+    )
+
+    # Transform keys for plotting function (needs strings)
+    dic_plot = {str(k): v for k, v in dic_final.items()}
+
+    pltt.plot_quantiles(
+        dic_plot,
+        title,
+        ylabel,
+        img_path,
+        all
+    )
+
+    return dic_final
+
+
+def season_box(
+    sr_list : list,
+    months,
+    y_label,
+    title,
+    folder
+):
+        
+    dic_sr = {}
+    for sr in sr_list:
+        period = f"{sr.index.year.min()}-{sr.index.year.max()}"
+        sr_m = sr[sr.index.month.isin(months)]
+        sr_grouped = [sr_m[sr_m.index.month == m] for m in months]
+        dic_sr[period] = sr_grouped
+    
+    pltt.season_box_plot(dic_sr, months, y_label, title, folder)
+
+    return None
