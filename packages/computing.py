@@ -39,7 +39,7 @@ def climatology(
     pltt.plot_data(
         sr_clim_median,
         "Normal",
-        f"{variable} normal ({method} / {start_year}-{end_year}) at Rivesaltes",
+        f"{variable} normal ({method} / {start_year}-{end_year})",
         f"{folder}/{method}_norm_{variable}_{start_year}_{end_year}"
     )
     # Computing mean method
@@ -48,7 +48,7 @@ def climatology(
     pltt.plot_data(
         sr_clim_mean,
         "Normal",
-        f"{variable} normal ({method} / {start_year}-{end_year}) at Rivesaltes",
+        f"{variable} normal ({method} / {start_year}-{end_year})",
         f"{folder}/{method}_norm_{variable}_{start_year}_{end_year}"
     )
 
@@ -522,12 +522,11 @@ def clim_ma(
     
     # Extracting each day
     day = sr_range.index.dayofyear
-    # Building a serie with the days
     if method == "mean":
         sr_day = sr_range.groupby(day).apply(np.mean)
     elif method == "median":
         sr_day = sr_range.groupby(day).apply(np.median)
-    
+        
     # Risk for limit days (as 1 or 365) to not be able to have an average
     # Wrap-around of the calendar to do the average for 1 with 364/364/365 and 2/3/4
     # It creates a continuity: 365 is followed by 1
@@ -702,7 +701,19 @@ def season_box(
         period = f"{sr.index.year.min()}-{sr.index.year.max()}"
         sr_m = sr[sr.index.month.isin(months)]
         sr_grouped = [sr_m[sr_m.index.month == m] for m in months]
-        dic_sr[period] = sr_grouped
+        
+        if folder == "precip":
+            total = sr_m.sum()
+            cumul_m = [g.sum() for g in sr_grouped]
+        else:
+            total = None
+            cumul_m = None   
+            
+        dic_sr[period] = {
+            "series": sr_grouped,
+            "total": total,
+            "cumul_m": cumul_m
+    }
     
     pltt.season_box_plot(dic_sr, months, y_label, title, folder)
 

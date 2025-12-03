@@ -60,7 +60,7 @@ def plot_data(
         plt.title(f"{graph_title} over Perpignan")
 
     plt.xlabel("Date") 
-    if var_name == "Normal":
+    if var_name == "normal":
         plt.xticks(np.arange(0, 366, 30))
     
     var_call_lower = graph_title.lower()
@@ -71,6 +71,8 @@ def plot_data(
         plt.ylabel("Precipitation (mm)")
     elif "humidity" in var_call_lower:
         plt.ylabel("Relative Humidity (%)")
+    elif "solar radiation" in var_call_lower:
+        plt.ylabel("Solar radiation (kWh/m²)")
        
     if yaxe_precision:
         plt.gca().yaxis.set_minor_locator(plt.MultipleLocator(0.5))
@@ -428,13 +430,13 @@ def plot_quantiles_max(
     plt.ylim(0, 45)
     plt.show()
     
-
+  
 def season_box_plot(
     dic_sr,
     months,
     y_label,
     title,
-    folder 
+    folder
 ):
     month_labels_map = {
         (12,1,2): ["Dec","Jan","Feb"],
@@ -442,40 +444,42 @@ def season_box_plot(
         (6,7,8): ["Jun","Jul","Aug"],
         (9,10,11): ["Sep","Oct","Nov"]
     }
-    
+
     labels = month_labels_map[months]
     save = "".join(labels).lower()
 
     n_months = len(months)
     n_series = len(dic_sr)
-    
+
     plt.figure(figsize=(10, 6))
-    
+    ax = plt.gca()
+
     base_positions = np.arange(1, n_months+1)
-    
-    # --- décalage horizontal pour chaque série ---
     width = 0.15
     total_width = width * n_series
     offsets = np.linspace(-total_width/2, total_width/2, n_series)
-    
-    # --- Colormap personnalisé vert → bleu → rouge ---
+
     custom_cmap = LinearSegmentedColormap.from_list(
         "green_blue_red", ["green", "blue", "red"]
     )
-    
-    legend_handles = []
 
-    # --- Boxplots ---
-    for i, (period, groups) in enumerate(dic_sr.items()):
+    legend_handles = []
+    ymin_box = np.inf
+
+    # ================ BOX PLOTS ================
+    for i, (period, info) in enumerate(dic_sr.items()):
+        series = info["series"]
+        totals = info["total"]
+        cumuls_m = info["cumul_m"]
+
         positions = base_positions + offsets[i]
 
-        # Normaliser l’indice i pour obtenir une couleur entre 0 et 1
         color_value = i / (n_series - 1) if n_series > 1 else 0.5
         box_color = custom_cmap(color_value, 0.4)
         median_color = custom_cmap(color_value, 1.0)
 
-        plt.boxplot(
-            groups,
+        bp = plt.boxplot(
+            series,
             positions=positions,
             widths=width,
             patch_artist=True,
@@ -483,8 +487,42 @@ def season_box_plot(
             medianprops=dict(color=median_color)
         )
 
+        # repérer les min des boxes
+        for g in series:
+            if len(g) > 0:
+                ymin_box = min(ymin_box, g.min())
+
         legend_handles.append(Patch(facecolor=box_color, label=period))
 
+    # ================ TEXTE POUR CUMULS ================
+    if folder == "precip":
+        # Position verticale (sous les box)
+        y_offset = ymin_box - abs(ymin_box) * 0.20
+
+        for i, (period, info) in enumerate(dic_sr.items()):
+            cumuls_m = info["cumul_m"]
+            positions = base_positions + offsets[i]
+            if cumuls_m is not None:
+                for pos, val in zip(positions, cumuls_m):
+                    plt.text(
+                        pos, y_offset, f"{val:.0f}",
+                        ha="center", va="top",
+                        fontsize=9, fontweight="bold"
+                    )
+
+        # Récap totaux en haut à gauche
+        txt = "\n".join(
+            [f"{p}: {info['total']:.0f} mm" for p, info in dic_sr.items()]
+        )
+        plt.text(
+            0.01, 0.98,
+            txt,
+            transform=ax.transAxes,
+            ha="left", va="top",
+            fontsize=10, fontweight="bold"
+        )
+
+    # ================ STYLE GRAPHIQUE ================
     plt.xticks(base_positions, labels)
     plt.xlabel("Month")
     plt.ylabel(y_label)
@@ -495,4 +533,82 @@ def season_box_plot(
     plt.tight_layout()
 
     plt.savefig(f"figs/{folder}/{save}_boxplot.png", dpi=300, bbox_inches="tight")
+    plt.show()
+
+
+def plot_rr_bar(
+    sr,
+    title,
+    path
+):
+
+    plt.figure(figsize=(10, 5))
+    plt.bar(
+        sr.index,
+        sr.values,
+        width=150,
+        color="steelblue",
+        edgecolor="black",
+        linewidth=1.0
+    )
+    plt.title(title)
+    plt.xlabel("Year")
+    plt.ylabel("Precipitation (mm)")
+    plt.grid(axis="y", alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"figs/{path}", dpi=300, bbox_inches="tight")
+    plt.show()
+
+
+def monthly_rr_box(
+    sr_one,
+    range_one,
+    sr_two,
+    range_two
+):
+
+    # Groupement mensuel
+    group_o = [sr_one[sr_one.index.month == m] for m in range(1, 13)]
+    group_t   = [sr_two[sr_two.index.month == m] for m in range(1, 13)]
+
+    # Préparation du graphique
+    plt.figure(figsize=(12, 6))
+
+    pos_o = range(1, 13)
+    pos_t = [p + 0.3 for p in pos_o]  # separating bow plot
+
+    # Boxplots
+    plt.boxplot(
+        group_o, 
+        positions=pos_o, 
+        widths=0.25, 
+        patch_artist=True,
+        boxprops=dict(facecolor="lightblue"), 
+        medianprops=dict(color="blue")
+        )
+    plt.boxplot(
+        group_t, 
+        positions=pos_t, 
+        widths=0.25, 
+        patch_artist=True,
+        boxprops=dict(facecolor="salmon"), 
+        medianprops=dict(color="red")
+        )
+
+    plt.xticks(range(1, 13), 
+            ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            )
+    plt.xlabel("Month")
+    plt.ylabel("Precipitation (mm)")
+    plt.title("Monthly quantiles precipitation comparison at Rivesaltes station")
+    plt.legend(
+        handles=[
+            Patch(facecolor="lightblue", label=f"{range_one}"),
+            Patch(facecolor="salmon", label=f"{range_two}")
+        ],
+        loc="upper left"
+    )
+    plt.grid(alpha=0.3)
+    plt.tight_layout()
     plt.show()
